@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>A4 Photo Collage Generator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* --- Custom Font Definition --- */
+        @font-face {
+            font-family: 'Aptos';
+            src: url('https://cdn.fusedframe.co.uk/fonts/aptos/aptos-regular.woff2') format('woff2');
+            font-weight: normal;
+            font-style: normal;
+        }
+
+        @font-face {
+            font-family: 'Aptos';
+            src: url('https://cdn.fusedframe.co.uk/fonts/aptos/aptos-bold.woff2') format('woff2');
+            font-weight: bold;
+            font-style: normal;
+        }
+
+        /* --- Branding and Custom Styles --- */
+        body {
+            background-color: #111827;
+            color: #e5e7eb;
+            font-family: 'Aptos', sans-serif;
+        }
+
+        .brand-header {
+            color: #94fdf8;
+            font-weight: bold;
+        }
+        
+        .brand-container {
+            background-color: #1e374d;
+        }
+
+        .brand-accent {
+             color: #94fdf8;
+        }
+
+        .brand-button {
+            background-color: #94fdf8;
+            color: #111827;
+            transition: background-color 0.3s ease, transform 0.2s ease;
+        }
+
+        .brand-button:hover {
+            background-color: #7dded8;
+            transform: translateY(-2px);
+        }
+
+        .brand-button:disabled {
+            background-color: #4b6a83;
+            color: #9ca3af;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        /* --- A4 Page Styling for Screen Preview --- */
+        .a4-page {
+            margin: 2rem auto;
+            background-color: white;
+            box-shadow: 0 0 15px rgba(0, 0, 0, 0.5);
+            page-break-after: always; /* Ensure each page prints separately */
+            overflow: hidden; /* Hide anything that overflows the page */
+        }
+
+        .a4-portrait {
+            width: 210mm;
+            height: 297mm;
+        }
+        
+        .a4-landscape {
+            width: 297mm;
+            height: 210mm;
+        }
+
+        .image-grid {
+            display: grid;
+            gap: 0; /* No gap between images */
+            padding: 0; /* No padding on the page */
+            width: 100%;
+            height: 100%;
+            box-sizing: border-box;
+            background-color: #fff; /* White background for empty space */
+        }
+
+        .image-grid img {
+            width: 100%;
+            height: 100%;
+            /* Use 'contain' to ensure the whole image is visible without cropping */
+            object-fit: contain; 
+            border-radius: 0; /* No rounded corners */
+        }
+        
+        /* --- Spinner for Loading --- */
+        .loader {
+            border: 4px solid #37536d;
+            border-top: 4px solid #94fdf8;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* --- Print-Specific Styles --- */
+        @media print {
+            body {
+                background-color: white;
+                -webkit-print-color-adjust: exact; /* Force printing of background colors */
+                print-color-adjust: exact;
+            }
+
+            /* Hide UI elements that shouldn't be printed */
+            .no-print {
+                display: none;
+            }
+
+            /* Remove screen-only styling from the A4 pages */
+            .a4-page {
+                margin: 0;
+                box-shadow: none;
+                width: 100%;
+                height: 100%;
+                page-break-after: always;
+            }
+        }
+        
+        /* Default page size for printing. Will be overridden by JS. */
+        @page {
+            size: A4;
+            margin: 0;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col items-center p-4 sm:p-8">
+
+    <!-- Header and Controls -->
+    <div class="no-print w-full max-w-5xl mb-8">
+        <header class="text-center mb-6">
+            <h1 class="brand-header text-4xl sm:text-5xl font-bold">A4 Photo Collage Generator</h1>
+            <p class="mt-2 text-lg text-gray-300">Upload your images to create a multi-page A4 collage.</p>
+        </header>
+
+        <div class="brand-container p-6 rounded-2xl shadow-lg flex flex-col md:flex-row gap-4 items-center justify-between">
+            <!-- File Uploader -->
+            <div class="flex-grow">
+                <label for="imageUpload" class="font-bold brand-accent mb-2 block">1. Select Images</label>
+                <input type="file" id="imageUpload" accept="image/*" multiple
+                       class="block w-full text-sm text-gray-300
+                              file:mr-4 file:py-2 file:px-4
+                              file:rounded-full file:border-0
+                              file:text-sm file:font-semibold
+                              file:bg-gray-700 file:text-gray-200
+                              hover:file:bg-gray-600 cursor-pointer"/>
+                <p class="text-xs text-gray-400 mt-2">The app will automatically calculate the best grid for your images.</p>
+            </div>
+            
+            <!-- Action Buttons -->
+            <div class="flex items-center gap-4 mt-4 md:mt-0">
+                 <div class="text-center">
+                    <label class="font-bold brand-accent mb-2 block">2. Orientation</label>
+                    <select id="orientation" class="bg-gray-700 text-white rounded-full py-2 px-4 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 focus:ring-cyan-500">
+                        <option value="portrait" selected>Portrait</option>
+                        <option value="landscape">Landscape</option>
+                    </select>
+                 </div>
+                 <div class="text-center">
+                     <label class="font-bold brand-accent mb-2 block">3. Print / Save</label>
+                     <button id="printButton" disabled class="brand-button font-bold py-2 px-6 rounded-full shadow-md w-full">
+                         Print to PDF
+                     </button>
+                 </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Loading Indicator -->
+    <div id="loading" class="no-print hidden flex-col items-center justify-center my-10">
+        <div class="loader"></div>
+        <p class="mt-4 text-lg">Generating your collage...</p>
+    </div>
+
+    <!-- Collage Preview Container -->
+    <div id="collageContainer">
+        <!-- A4 pages will be generated here by JavaScript -->
+    </div>
+
+    <!-- Dynamic Print Style -->
+    <style id="print-style"></style>
+
+    <script>
+        const imageUpload = document.getElementById('imageUpload');
+        const printButton = document.getElementById('printButton');
+        const collageContainer = document.getElementById('collageContainer');
+        const loadingIndicator = document.getElementById('loading');
+        const orientationSelect = document.getElementById('orientation');
+        const printStyleSheet = document.getElementById('print-style');
+
+        let allFiles = [];
+
+        // --- Event Listeners ---
+        imageUpload.addEventListener('change', (event) => {
+            allFiles = Array.from(event.target.files);
+            if (allFiles.length > 0) {
+                generateCollage();
+            }
+        });
+
+        orientationSelect.addEventListener('change', () => {
+             if (allFiles.length > 0) {
+                generateCollage();
+            }
+        });
+        
+        printButton.addEventListener('click', () => {
+            const orientation = orientationSelect.value;
+            // Dynamically set the print orientation
+            printStyleSheet.innerHTML = `@page { size: A4 ${orientation}; margin: 0; }`;
+            window.print();
+            // Clear the style after printing
+            printStyleSheet.innerHTML = '';
+        });
+        
+        // --- Core Collage Generation Logic (REWRITTEN) ---
+        async function generateCollage() {
+            if (allFiles.length === 0) {
+                printButton.disabled = true;
+                return;
+            }
+
+            loadingIndicator.classList.remove('hidden');
+            loadingIndicator.classList.add('flex');
+            collageContainer.innerHTML = '';
+            printButton.disabled = true;
+
+            let unprocessedFiles = [...allFiles];
+
+            while (unprocessedFiles.length > 0) {
+                const orientation = orientationSelect.value;
+                const MAX_IMAGES_TO_CONSIDER = 30; // Max images to try fitting on a single page for performance
+
+                const imageCountForPageAttempt = Math.min(unprocessedFiles.length, MAX_IMAGES_TO_CONSIDER);
+                const { rows, cols } = findBestGrid(imageCountForPageAttempt, orientation);
+                
+                // The number of images that will actually go on this page
+                const imagesToPlaceOnThisPage = Math.min(unprocessedFiles.length, rows * cols);
+                const pageFiles = unprocessedFiles.slice(0, imagesToPlaceOnThisPage);
+
+                const pageElement = createPageElement(orientation);
+                const gridElement = pageElement.querySelector('.image-grid');
+
+                gridElement.style.gridTemplateRows = `repeat(${rows}, 1fr)`;
+                gridElement.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+
+                const imagePromises = pageFiles.map(file => createImageFromFile(file));
+                const imageElements = await Promise.all(imagePromises);
+                
+                imageElements.forEach(img => gridElement.appendChild(img));
+                collageContainer.appendChild(pageElement);
+                
+                // Remove the processed files for the next iteration
+                unprocessedFiles.splice(0, imagesToPlaceOnThisPage);
+            }
+
+            loadingIndicator.classList.add('hidden');
+            loadingIndicator.classList.remove('flex');
+            printButton.disabled = false;
+        }
+
+        // --- Helper: Find the most efficient grid for a given number of images ---
+        function findBestGrid(imageCount, orientation) {
+            if (imageCount === 0) return { rows: 0, cols: 0 };
+
+            let bestGrid = { rows: 1, cols: imageCount, score: Infinity };
+            const pageAspectRatio = orientation === 'portrait' ? 210 / 297 : 297 / 210;
+
+            // Loop through possible numbers of rows
+            for (let r = 1; r <= imageCount; r++) {
+                // Calculate required columns for this many rows
+                let c = Math.ceil(imageCount / r);
+
+                // Let's not make grids that are too skinny or wide (e.g. 1x14)
+                if (r > 10 || c > 10) continue;
+
+                const gridAspectRatio = c / r;
+                const emptyCells = (r * c) - imageCount;
+                const ratioDifference = Math.abs(gridAspectRatio - pageAspectRatio);
+
+                // Scoring prioritizes fewer empty cells, then matching the page's aspect ratio.
+                const score = emptyCells + ratioDifference * 2;
+
+                if (score < bestGrid.score) {
+                    bestGrid = { rows: r, cols: c, score: score };
+                }
+            }
+            return { rows: bestGrid.rows, cols: bestGrid.cols };
+        }
+        
+        // --- Helper: Create DOM elements ---
+        
+        function createPageElement(orientation) {
+            const page = document.createElement('div');
+            page.className = `a4-page ${orientation === 'portrait' ? 'a4-portrait' : 'a4-landscape'}`;
+            page.innerHTML = `<div class="image-grid"></div>`;
+            return page;
+        }
+
+        function createImageFromFile(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    const img = document.createElement('img');
+                    img.src = event.target.result;
+                    img.alt = file.name;
+                    resolve(img);
+                };
+                reader.onerror = (error) => reject(error);
+                reader.readAsDataURL(file);
+            });
+        }
+    </script>
+
+</body>
+</html>
+
